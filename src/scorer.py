@@ -2,6 +2,8 @@ import pdfplumber
 import tensorflow_hub as hub
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+import os
 
 # Load TensorFlow Universal Sentence Encoder (USE)
 embed_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder/4")
@@ -20,12 +22,16 @@ def extract_text_from_pdf(pdf_path):
 
 def get_text_embedding(text):
     """Convert text to a 2D vector using TensorFlow Universal Sentence Encoder."""
+    if not text.strip():
+        return np.zeros((512,))  # Return zero-vector for empty text
     embedding = embed_model([text]).numpy()
     return embedding.squeeze()  # Ensure the output is always (512,) instead of (1, 512)
 
 def calculate_similarity_using_tensorflow(reference_texts, student_text):
     """Compute similarity scores using Universal Sentence Encoder embeddings."""
-    
+    if not reference_texts:
+        return 0.0  # Avoid error when reference text is missing
+
     # Convert reference texts into 2D NumPy array
     reference_embeddings = np.array([get_text_embedding(text) for text in reference_texts])
 
@@ -43,3 +49,16 @@ def calculate_similarity_using_tensorflow(reference_texts, student_text):
     max_similarity = np.max(similarities)  
 
     return max_similarity * 100  # Return as percentage
+
+def calculate_similarity_tfidf(reference_texts, student_text):
+    """Compute similarity using TF-IDF Cosine Similarity."""
+    vectorizer = TfidfVectorizer()
+    
+    # Combine reference texts and student text for vectorization
+    texts = reference_texts + [student_text]
+    tfidf_matrix = vectorizer.fit_transform(texts)
+    
+    # Compute cosine similarity between last document (student) and references
+    similarity_scores = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
+    
+    return max(similarity_scores[0]) * 100  # Return highest match percentage

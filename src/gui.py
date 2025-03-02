@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from scorer import extract_text_from_pdf, calculate_similarity_using_tensorflow
+from scorer import extract_text_from_pdf, calculate_similarity_using_tensorflow, calculate_similarity_tfidf
 import os
+import glob
 
 class NLPScorerGUI:
     def __init__(self, root):
@@ -68,28 +69,46 @@ class NLPScorerGUI:
     
     def process_pdfs(self, ref_dir, student_dir, threshold):
         reference_texts = []
-        for filename in os.listdir(ref_dir):
-            if filename.endswith('.pdf'):
-                pdf_path = os.path.join(ref_dir, filename)
-                raw_text = extract_text_from_pdf(pdf_path)
-                if raw_text:  # Only add non-empty texts
-                    reference_texts.append(raw_text)
-        
+
+        # DEBUG PRINT - Check which files are detected
+        ref_pdfs = glob.glob(os.path.join(ref_dir, "*.pdf"))
+        print(f"Reference PDFs found: {ref_pdfs}")
+
+        # Extract text from all reference PDFs
+        for pdf_path in ref_pdfs:
+            raw_text = extract_text_from_pdf(pdf_path)
+            if raw_text:
+                reference_texts.append(raw_text)
+
+        if not reference_texts:
+            messagebox.showerror("Error", "No valid reference text extracted!")
+            return {}
+
         results = {}
-        for filename in os.listdir(student_dir):
-            if filename.endswith('.pdf'):
-                pdf_path = os.path.join(student_dir, filename)
-                raw_text = extract_text_from_pdf(pdf_path)
-                if raw_text:
-                    score = calculate_similarity_using_tensorflow(reference_texts, raw_text)
-                    results[filename] = score
-        
+
+        # DEBUG PRINT - Check which student files are detected
+        student_pdfs = glob.glob(os.path.join(student_dir, "*.pdf"))
+        print(f"Student PDFs found: {student_pdfs}")
+
+        # Process each student PDF separately
+        for pdf_path in student_pdfs:
+            filename = os.path.basename(pdf_path)  # Get only the filename
+            raw_text = extract_text_from_pdf(pdf_path)
+            if raw_text:
+                # Use TF-IDF similarity instead of USE for better accuracy
+                score = calculate_similarity_tfidf(reference_texts, raw_text)
+                results[filename] = score
+                print(f"Processed {filename}: {score:.2f}%")  # DEBUG PRINT
+
         return results
     
     def display_results(self, results):
         self.results_text.delete(1.0, tk.END)
-        for filename, score in results.items():
-            self.results_text.insert(tk.END, f"{filename}: {score:.2f}%\n")
+        if not results:
+            self.results_text.insert(tk.END, "No results found!\n")
+        else:
+            for filename, score in results.items():
+                self.results_text.insert(tk.END, f"{filename}: {score:.2f}%\n")
 
 def run_gui():
     root = tk.Tk()
